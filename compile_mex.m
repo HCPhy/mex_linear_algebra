@@ -5,9 +5,9 @@ function compile_mex()
 %   compile_mex
 %
 % This script compiles:
-%   - gf2_matmul_mex.c
-%   - null_gf2_mex.c
-%   - bitrank_mex.c
+%   - mela_matmul_gf2.c
+%   - mela_null_gf2.c
+%   - mela_rank_gf2.c
 %
 % It applies optimization flags (-O3, -mavx2) for performance.
 
@@ -60,28 +60,28 @@ else
     flags = {'-O', 'CFLAGS="$CFLAGS -O3 -mavx2"'};
 end
 
-% 1. gf2_matmul_mex
-fprintf('Compiling gf2_matmul_mex.c...\n');
+% 1. mela_matmul_gf2
+fprintf('Compiling mela_matmul_gf2.c...\n');
 try
-    mex(flags{:}, '-outdir', 'bin', fullfile('src', 'gf2_matmul_mex.c'));
+    mex(flags{:}, '-outdir', 'bin', fullfile('src', 'mela_matmul_gf2.c'));
     fprintf('  Success.\n');
 catch ME
     fprintf('  FAILED: %s\n', ME.message);
 end
 
-% 2. null_gf2_mex
-fprintf('Compiling null_gf2_mex.c...\n');
+% 2. mela_null_gf2
+fprintf('Compiling mela_null_gf2.c...\n');
 try
-    mex(flags{:}, '-outdir', 'bin', fullfile('src', 'null_gf2_mex.c'));
+    mex(flags{:}, '-outdir', 'bin', fullfile('src', 'mela_null_gf2.c'));
     fprintf('  Success.\n');
 catch ME
     fprintf('  FAILED: %s\n', ME.message);
 end
 
-% 3. bitrank_mex
-fprintf('Compiling bitrank_mex.c...\n');
+% 3. mela_rank_gf2
+fprintf('Compiling mela_rank_gf2.c...\n');
 try
-    mex(flags{:}, '-outdir', 'bin', fullfile('src', 'bitrank_mex.c'));
+    mex(flags{:}, '-outdir', 'bin', fullfile('src', 'mela_rank_gf2.c'));
     fprintf('  Success.\n');
 catch ME
     fprintf('  FAILED: %s\n', ME.message);
@@ -97,28 +97,28 @@ fprintf('\n----------------------------------------\n');
 fprintf('Running Tests...\n');
 fprintf('----------------------------------------\n');
 
-% 1. Test gf2_matmul_mex
-fprintf('Testing gf2_matmul_mex...\n');
+% 1. Test mela_matmul_gf2
+fprintf('Testing mela_matmul_gf2...\n');
 try
     A = logical(randi([0, 1], 100, 50));
     B = logical(randi([0, 1], 50, 30));
-    C_mex = gf2_matmul_mex(A, B);
+    C_mex = mela_matmul_gf2(A, B);
     C_ref = mod(double(A) * double(B), 2);
     if isequal(C_mex, C_ref)
         fprintf('  [PASSED] Matrix multiplication matches MATLAB reference.\n');
     else
         fprintf('  [FAILED] Matrix multiplication mismatch.\n');
-        error('gf2_matmul_mex failed verification.');
+        error('mela_matmul_gf2 failed verification.');
     end
 catch ME
     fprintf('  [ERROR] %s\n', ME.message);
 end
 
-% 2. Test null_gf2_mex
-fprintf('Testing null_gf2_mex...\n');
+% 2. Test mela_null_gf2
+fprintf('Testing mela_null_gf2...\n');
 try
     A = logical(randi([0, 1], 50, 100)); % Fat matrix usually has null space
-    Z = null_gf2_mex(A);
+    Z = mela_null_gf2(A);
 
     % Check dimensions
     [~, n] = size(A);
@@ -127,20 +127,20 @@ try
         fprintf('  [FAILED] Null space matrix has wrong number of rows.\n');
     else
         % Verify A * Z = 0
-        prod = gf2_matmul_mex(A, Z);
+        prod = mela_matmul_gf2(A, Z);
         if all(prod(:) == 0)
             fprintf('  [PASSED] A * Z is zero matrix.\n');
         else
             fprintf('  [FAILED] A * Z is NOT zero matrix.\n');
-            error('null_gf2_mex failed verification.');
+            error('mela_null_gf2 failed verification.');
         end
     end
 catch ME
     fprintf('  [ERROR] %s\n', ME.message);
 end
 
-% 3. Test bitrank_mex
-fprintf('Testing bitrank_mex...\n');
+% 3. Test mela_rank_gf2
+fprintf('Testing mela_rank_gf2...\n');
 try
     % Check if gfrank is available (MATLAB R2023b+)
     has_gfrank = exist('gfrank', 'builtin') || exist('gfrank', 'file');
@@ -151,39 +151,39 @@ try
         % Test against gfrank for various matrices
         % Test 1: Random matrix
         A = logical(randi([0, 1], 50, 50));
-        r_mex = bitrank_mex(A);
+        r_mex = mela_rank_gf2(A);
         r_ref = gfrank(A, 2);
         if r_mex == r_ref
             fprintf('  [PASSED] Random matrix rank matches gfrank. Rank = %d\n', r_mex);
         else
-            fprintf('  [FAILED] Random matrix rank mismatch: bitrank_mex=%d, gfrank=%d\n', r_mex, r_ref);
-            error('bitrank_mex failed verification against gfrank.');
+            fprintf('  [FAILED] Random matrix rank mismatch: mela_rank_gf2=%d, gfrank=%d\n', r_mex, r_ref);
+            error('mela_rank_gf2 failed verification against gfrank.');
         end
 
         % Test 2: Zero matrix
         Z = false(10);
-        r_Z = bitrank_mex(Z);
+        r_Z = mela_rank_gf2(Z);
         r_Z_ref = gfrank(Z, 2);
         if r_Z == r_Z_ref && r_Z == 0
             fprintf('  [PASSED] Zero matrix rank matches gfrank. Rank = %d\n', r_Z);
         else
-            fprintf('  [FAILED] Zero matrix rank: bitrank_mex=%d, gfrank=%d\n', r_Z, r_Z_ref);
+            fprintf('  [FAILED] Zero matrix rank: mela_rank_gf2=%d, gfrank=%d\n', r_Z, r_Z_ref);
         end
 
         % Test 3: Identity matrix
         I = eye(20, 'logical');
-        r_I = bitrank_mex(I);
+        r_I = mela_rank_gf2(I);
         r_I_ref = gfrank(I, 2);
         if r_I == r_I_ref && r_I == 20
             fprintf('  [PASSED] Identity matrix rank matches gfrank. Rank = %d\n', r_I);
         else
-            fprintf('  [FAILED] Identity matrix rank: bitrank_mex=%d, gfrank=%d\n', r_I, r_I_ref);
+            fprintf('  [FAILED] Identity matrix rank: mela_rank_gf2=%d, gfrank=%d\n', r_I, r_I_ref);
         end
 
         % Test 4: Transpose consistency
         A = logical(randi([0, 1], 50, 50));
-        r_A = bitrank_mex(A);
-        r_AT = bitrank_mex(A');
+        r_A = mela_rank_gf2(A);
+        r_AT = mela_rank_gf2(A');
         if r_A == r_AT
             fprintf('  [PASSED] Rank consistency check (Rank(A) == Rank(A'')). Rank = %d\n', r_A);
         else
@@ -194,18 +194,18 @@ try
 
         % Random matrix consistency check (Rank(A) == Rank(A'))
         A = logical(randi([0, 1], 50, 50));
-        r_A = bitrank_mex(A);
-        r_AT = bitrank_mex(A');
+        r_A = mela_rank_gf2(A);
+        r_AT = mela_rank_gf2(A');
         if r_A == r_AT
             fprintf('  [PASSED] Rank consistency check (Rank(A) == Rank(A'')). Rank = %d\n', r_A);
         else
             fprintf('  [FAILED] Rank consistency mismatch: Rank(A)=%d, Rank(A'')=%d\n', r_A, r_AT);
-            error('bitrank_mex failed verification.');
+            error('mela_rank_gf2 failed verification.');
         end
 
         % Zero matrix - rank should be 0
         Z = false(10);
-        r_Z = bitrank_mex(Z);
+        r_Z = mela_rank_gf2(Z);
         if r_Z == 0
             fprintf('  [PASSED] Rank of zero matrix is correct.\n');
         else
@@ -214,7 +214,7 @@ try
 
         % Random matrix sanity check
         A = logical(randi([0, 1], 50, 50));
-        r = bitrank_mex(A);
+        r = mela_rank_gf2(A);
         if r <= 50 && r >= 0
             fprintf('  [PASSED] Rank of random matrix is within bounds.\n');
         else
@@ -228,24 +228,24 @@ end
 % 4. Test Double/Integer Inputs
 fprintf('Testing Double/Integer Inputs...\n');
 try
-    % gf2_matmul_mex with doubles
+    % mela_matmul_gf2 with doubles
     A = randi([0, 1], 10, 10); % double by default
     B = randi([0, 1], 10, 10);
-    C_mex = gf2_matmul_mex(A, B);
+    C_mex = mela_matmul_gf2(A, B);
     C_ref = mod(A * B, 2);
     if isequal(double(C_mex), C_ref)
-        fprintf('  [PASSED] gf2_matmul_mex supports double inputs.\n');
+        fprintf('  [PASSED] mela_matmul_gf2 supports double inputs.\n');
     else
-        fprintf('  [FAILED] gf2_matmul_mex double input mismatch.\n');
+        fprintf('  [FAILED] mela_matmul_gf2 double input mismatch.\n');
     end
 
-    % bitrank_mex with doubles (using odd numbers)
+    % mela_rank_gf2 with doubles (using odd numbers)
     A = [2, 3; 4, 5]; % [0, 1; 0, 1] mod 2. Rank should be 1.
-    r = bitrank_mex(A);
+    r = mela_rank_gf2(A);
     if r == 1
-        fprintf('  [PASSED] bitrank_mex supports double inputs (parity check).\n');
+        fprintf('  [PASSED] mela_rank_gf2 supports double inputs (parity check).\n');
     else
-        fprintf('  [FAILED] bitrank_mex double input failed. Rank=%d (expected 1)\n', r);
+        fprintf('  [FAILED] mela_rank_gf2 double input failed. Rank=%d (expected 1)\n', r);
     end
 catch ME
     fprintf('  [ERROR] %s\n', ME.message);

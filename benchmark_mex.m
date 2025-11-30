@@ -3,9 +3,9 @@ function benchmark_mex()
 %
 % This script compares the performance of custom MEX implementations
 % against MATLAB built-in functions for GF(2) linear algebra operations:
-%   - gf2_matmul_mex vs gf(A,1) * gf(B,1)
-%   - bitrank_mex vs rank(gf(A,1))
-%   - null_gf2_mex vs gf2null(gf(A,1))
+%   - mela_matmul_gf2 vs gf(A,1) * gf(B,1)
+%   - mela_rank_gf2 vs rank(gf(A,1))
+%   - mela_null_gf2 vs gf2null(gf(A,1))
 %
 % The script tests various matrix sizes and generates performance plots.
 
@@ -23,9 +23,9 @@ end
 sizes = [32, 64, 128, 256, 512, 1024];
 
 % Check dependencies
-if ~exist('gf2_matmul_mex', 'file') || ...
-        ~exist('null_gf2_mex', 'file') || ...
-        ~exist('bitrank_mex', 'file')
+if ~exist('mela_matmul_gf2', 'file') || ...
+        ~exist('mela_null_gf2', 'file') || ...
+        ~exist('mela_rank_gf2', 'file')
     error('MEX functions not found. Please run compile_mex first.');
 end
 
@@ -41,7 +41,7 @@ fprintf('MEX Function Benchmark Suite\n');
 fprintf('========================================\n\n');
 
 %% Benchmark 1: GF(2) Matrix Multiplication
-fprintf('Benchmarking gf2_matmul_mex...\n');
+fprintf('Benchmarking mela_matmul_gf2...\n');
 times_mex_matmul = zeros(size(sizes));
 times_builtin_matmul = zeros(size(sizes));
 
@@ -54,7 +54,7 @@ for i = 1:length(sizes)
     B = logical(randi([0, 1], n, n));
 
     % Compute results
-    C_mex = gf2_matmul_mex(A, B);
+    C_mex = mela_matmul_gf2(A, B);
     C_gf = gf(A, 1) * gf(B, 1);
     C_matlab = C_gf.x;
 
@@ -66,7 +66,7 @@ for i = 1:length(sizes)
     end
 
     % Benchmark MEX function
-    t_mex = timeit(@() gf2_matmul_mex(A, B), 1);
+    t_mex = timeit(@() mela_matmul_gf2(A, B), 1);
     times_mex_matmul(i) = t_mex;
 
     % Benchmark MATLAB GF(2) matrix multiplication
@@ -79,7 +79,7 @@ for i = 1:length(sizes)
 end
 
 %% Benchmark 2: Rank Computation
-fprintf('\nBenchmarking bitrank_mex...\n');
+fprintf('\nBenchmarking mela_rank_gf2...\n');
 times_mex_rank = zeros(size(sizes));
 times_builtin_rank = zeros(size(sizes));
 
@@ -93,7 +93,7 @@ if has_gf
         A = logical(randi([0, 1], n, n));
 
         % Compute results
-        r_mex = bitrank_mex(A);
+        r_mex = mela_rank_gf2(A);
         r_matlab = rank(gf(A, 1));
 
         % Verify correctness
@@ -104,7 +104,7 @@ if has_gf
         end
 
         % Benchmark MEX function
-        t_mex = timeit(@() bitrank_mex(A), 1);
+        t_mex = timeit(@() mela_rank_gf2(A), 1);
         times_mex_rank(i) = t_mex;
 
         % Benchmark MATLAB GF(2) rank
@@ -125,7 +125,7 @@ else
         A = logical(randi([0, 1], n, n));
 
         % Benchmark MEX function
-        t_mex = timeit(@() bitrank_mex(A), 1);
+        t_mex = timeit(@() mela_rank_gf2(A), 1);
         times_mex_rank(i) = t_mex;
         times_builtin_rank(i) = NaN;
 
@@ -134,7 +134,7 @@ else
 end
 
 %% Benchmark 3: Null Space Computation
-fprintf('\nBenchmarking null_gf2_mex...\n');
+fprintf('\nBenchmarking mela_null_gf2...\n');
 times_mex_null = zeros(size(sizes));
 times_builtin_null = zeros(size(sizes));
 
@@ -149,13 +149,13 @@ if has_gf
         A = logical(randi([0, 1], m, n));
 
         % Compute results
-        Z_mex = null_gf2_mex(A);
+        Z_mex = mela_null_gf2(A);
         % Use gf2null for proper GF(2) null space computation
         Z_gf = gf2null(gf(A, 1));
 
         % Verify correctness: Both should satisfy A*Z = 0 in GF(2)
         if ~isempty(Z_mex)
-            prod_mex = gf2_matmul_mex(A, Z_mex);
+            prod_mex = mela_matmul_gf2(A, Z_mex);
             if ~all(prod_mex(:) == 0)
                 warning('Size %dx%d: MEX null space verification failed!', m, n);
                 fprintf('  [MISMATCH] A*Z_mex is not zero. Skipping.\n');
@@ -174,7 +174,7 @@ if has_gf
         end
 
         % Benchmark MEX function
-        t_mex = timeit(@() null_gf2_mex(A), 1);
+        t_mex = timeit(@() mela_null_gf2(A), 1);
         times_mex_null(i) = t_mex;
         % Benchmark MATLAB GF(2) null space using gf2null
         t_builtin = timeit(@() gf2null(gf(A, 1)), 1);
@@ -195,7 +195,7 @@ else
         A = logical(randi([0, 1], m, n));
 
         % Benchmark MEX function
-        t_mex = timeit(@() null_gf2_mex(A), 1);
+        t_mex = timeit(@() mela_null_gf2(A), 1);
         times_mex_null(i) = t_mex;
         times_builtin_null(i) = NaN;
 

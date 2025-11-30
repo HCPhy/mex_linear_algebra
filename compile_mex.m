@@ -174,6 +174,32 @@ catch ME
     fprintf('  [ERROR] %s\n', ME.message);
 end
 
+% 4. Test Double/Integer Inputs
+fprintf('Testing Double/Integer Inputs...\n');
+try
+    % gf2_matmul_mex with doubles
+    A = randi([0, 1], 10, 10); % double by default
+    B = randi([0, 1], 10, 10);
+    C_mex = gf2_matmul_mex(A, B);
+    C_ref = mod(A * B, 2);
+    if isequal(double(C_mex), C_ref)
+        fprintf('  [PASSED] gf2_matmul_mex supports double inputs.\n');
+    else
+        fprintf('  [FAILED] gf2_matmul_mex double input mismatch.\n');
+    end
+
+    % bitrank_mex with doubles (using odd numbers)
+    A = [2, 3; 4, 5]; % [0, 1; 0, 1] mod 2. Rank should be 1.
+    r = bitrank_mex(A);
+    if r == 1
+        fprintf('  [PASSED] bitrank_mex supports double inputs (parity check).\n');
+    else
+        fprintf('  [FAILED] bitrank_mex double input failed. Rank=%d (expected 1)\n', r);
+    end
+catch ME
+    fprintf('  [ERROR] %s\n', ME.message);
+end
+
 fprintf('\nAll tests completed.\n');
 
 end

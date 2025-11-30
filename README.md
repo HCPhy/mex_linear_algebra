@@ -2,6 +2,8 @@
 
 This repository contains optimized MATLAB MEX functions for linear algebra operations over the Galois Field GF(2). These functions are designed for high performance, utilizing AVX2/AVX512 instructions and OpenMP multi-threading where available.
 
+All functions support both **logical** (boolean) and **double** (integer) input matrices. For double inputs, values are treated modulo 2 (parity check).
+
 ## Features
 
 - **`gf2_matmul_mex`**: Fast matrix multiplication over GF(2).
@@ -32,10 +34,10 @@ The script will:
 
 ### Matrix Multiplication (`gf2_matmul_mex`)
 
-Computes $C = A \times B$ over GF(2).
+Computes $C = A \times B$ over GF(2). Accepts `logical` or `double` matrices.
 
 ```matlab
-A = randi([0, 1], 100, 100);
+A = randi([0, 1], 100, 100); % double matrix
 B = randi([0, 1], 100, 50);
 C = gf2_matmul_mex(A, B);
 ```

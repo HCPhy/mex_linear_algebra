@@ -2,9 +2,9 @@
  *  gf2_matmul_mex.c
  *  Bit-packed Boolean matrix product  C = A * B  (mod 2).
  *
- *  A : logical(m x k)       (row-major in MATLAB)
- *  B : logical(k x n)
- *  C : logical(m x n)
+ *  A : logical or double (m x k)       (row-major in MATLAB)
+ *  B : logical or double (k x n)
+ *  C : logical (m x n)
  *
  *  Usage from MATLAB
  *      C = gf2_matmul_mex(A, B);
@@ -39,8 +39,8 @@
 #define BLOCK_ROWS 256
 
 /* pack a logical k x n into (k x WORDS(n)) uint64_t block  */
-static void pack_rows(const mxLogical *in, uint64_t *out,
-                      mwSize rows, mwSize cols)
+static void pack_rows_logical(const mxLogical *in, uint64_t *out,
+                              mwSize rows, mwSize cols)
 {
     for (mwSize i = 0; i < rows; ++i)
     {
@@ -49,6 +49,21 @@ static void pack_rows(const mxLogical *in, uint64_t *out,
 
         for (mwSize j = 0; j < cols; ++j)
             if (row[j * rows])                    /* A(i,j) in MATLAB */
+                prow[WORD_IDX(j)] |= (uint64_t)1 << BIT_POS(j);
+    }
+}
+
+/* pack a double k x n into (k x WORDS(n)) uint64_t block  */
+static void pack_rows_double(const double *in, uint64_t *out,
+                             mwSize rows, mwSize cols)
+{
+    for (mwSize i = 0; i < rows; ++i)
+    {
+        const double *row = in + i;               /* column-major */
+        uint64_t *prow    = out + i * WORDS(cols);
+
+        for (mwSize j = 0; j < cols; ++j)
+            if (((int)row[j * rows]) & 1)         /* Check parity */
                 prow[WORD_IDX(j)] |= (uint64_t)1 << BIT_POS(j);
     }
 }
@@ -68,27 +83,29 @@ void mexFunction(int nlhs, mxArray *plhs[],
     mwSize k2 = mxGetM(prhs[1]); mwSize n  = mxGetN(prhs[1]);
     if (k1 != k2) mexErrMsgTxt("Inner dimensions must agree.");
 
-    if (!mxIsLogical(prhs[0]) || !mxIsLogical(prhs[1]))
-        mexErrMsgTxt("Inputs must be logical matrices.");
-
-    const mxLogical *A = (const mxLogical*)mxGetData(prhs[0]);
-    const mxLogical *B = (const mxLogical*)mxGetData(prhs[1]);
+    if ((!mxIsLogical(prhs[0]) && !mxIsDouble(prhs[0])) || 
+        (!mxIsLogical(prhs[1]) && !mxIsDouble(prhs[1])))
+        mexErrMsgTxt("Inputs must be logical or double matrices.");
 
     mwSize wordsB = WORDS(n);
     mwSize wordsC = wordsB;                     /* same width */
 
     /* ---- pack rows of B once (k x wordsB) ---- */
     uint64_t *Bpack = mxCalloc((size_t)k2 * wordsB, sizeof(uint64_t));
-    pack_rows(B, Bpack, k2, n);
+    
+    if (mxIsDouble(prhs[1])) {
+        pack_rows_double((const double*)mxGetData(prhs[1]), Bpack, k2, n);
+    } else {
+        pack_rows_logical((const mxLogical*)mxGetData(prhs[1]), Bpack, k2, n);
+    }
 
     /* ---- allocate output logical(m x n) ---- */
     plhs[0] = mxCreateLogicalMatrix(m, n);
     mxLogical *C = (mxLogical*)mxGetData(plhs[0]);
 
-    /* ---- Temporary buffer for a block of C rows (packed) ---- */
-    /* We process C in blocks of BLOCK_ROWS */
-    /* uint64_t *Cblock = mxCalloc((size_t)BLOCK_ROWS * wordsC, sizeof(uint64_t)); */
-    /* MOVED INSIDE LOOP FOR THREAD SAFETY */
+    /* Determine type of A */
+    int A_is_double = mxIsDouble(prhs[0]);
+    const void *A_ptr = mxGetData(prhs[0]);
 
     /* ---- Main Loop: Process C in blocks of rows ---- */
     #pragma omp parallel for schedule(static)
@@ -106,8 +123,6 @@ void mexFunction(int nlhs, mxArray *plhs[],
 
         /* 
          * Iterate over k (columns of A / rows of B).
-         * For each k, we check A(i, k) for all i in the current block.
-         * If A(i, k) is 1, we XOR B(k, :) into C(i, :).
          */
         for (mwSize k = 0; k < k1; ++k)
         {
@@ -115,38 +130,60 @@ void mexFunction(int nlhs, mxArray *plhs[],
             uint64_t *Bk = Bpack + k * wordsB;
             
             /* Pointer to column k of A, starting at i_base */
-            const mxLogical *Ak = A + k * m + i_base;
-
-            for (mwSize i = 0; i < block_height; ++i)
-            {
-                if (Ak[i]) /* A(i_base + i, k) */
+            /* We handle double/logical distinction here */
+            
+            if (A_is_double) {
+                const double *Ak = (const double*)A_ptr + k * m + i_base;
+                for (mwSize i = 0; i < block_height; ++i)
                 {
-                    /* XOR B(k, :) into Cblock(i, :) */
-                    uint64_t *Ci = Cblock + i * wordsC;
-                    mwSize w = 0;
-
-#ifdef __AVX512F__
-                    /* Process 8 words (512 bits) at a time */
-                    for (; w + 8 <= wordsB; w += 8)
+                    if (((int)Ak[i]) & 1) /* A(i_base + i, k) is odd */
                     {
-                        __m512i vC = _mm512_loadu_si512((void const*)&Ci[w]);
-                        __m512i vB = _mm512_loadu_si512((void const*)&Bk[w]);
-                        _mm512_storeu_si512((void*)&Ci[w], _mm512_xor_si512(vC, vB));
+                        /* XOR B(k, :) into Cblock(i, :) */
+                        uint64_t *Ci = Cblock + i * wordsC;
+                        mwSize w = 0;
+                        /* AVX512 / NEON / Scalar logic ... */
+                        #ifdef __AVX512F__
+                        for (; w + 8 <= wordsB; w += 8) {
+                            __m512i vC = _mm512_loadu_si512((void const*)&Ci[w]);
+                            __m512i vB = _mm512_loadu_si512((void const*)&Bk[w]);
+                            _mm512_storeu_si512((void*)&Ci[w], _mm512_xor_si512(vC, vB));
+                        }
+                        #endif
+                        #if defined(__aarch64__) || defined(__arm64__)
+                        for (; w + 2 <= wordsB; w += 2) {
+                            uint64x2_t vC = vld1q_u64(&Ci[w]);
+                            uint64x2_t vB = vld1q_u64(&Bk[w]);
+                            vst1q_u64(&Ci[w], veorq_u64(vC, vB));
+                        }
+                        #endif
+                        for (; w < wordsB; ++w) Ci[w] ^= Bk[w];
                     }
-#endif
-#if defined(__aarch64__) || defined(__arm64__)
-                    /* Process 2 words (128 bits) at a time */
-                    for (; w + 2 <= wordsB; w += 2)
+                }
+            } else {
+                const mxLogical *Ak = (const mxLogical*)A_ptr + k * m + i_base;
+                for (mwSize i = 0; i < block_height; ++i)
+                {
+                    if (Ak[i]) /* A(i_base + i, k) is true */
                     {
-                        uint64x2_t vC = vld1q_u64(&Ci[w]);
-                        uint64x2_t vB = vld1q_u64(&Bk[w]);
-                        vst1q_u64(&Ci[w], veorq_u64(vC, vB));
-                    }
-#endif
-                    /* Scalar cleanup (or full loop if no AVX512) */
-                    for (; w < wordsB; ++w)
-                    {
-                        Ci[w] ^= Bk[w];
+                        /* XOR B(k, :) into Cblock(i, :) */
+                        uint64_t *Ci = Cblock + i * wordsC;
+                        mwSize w = 0;
+                        /* AVX512 / NEON / Scalar logic ... */
+                        #ifdef __AVX512F__
+                        for (; w + 8 <= wordsB; w += 8) {
+                            __m512i vC = _mm512_loadu_si512((void const*)&Ci[w]);
+                            __m512i vB = _mm512_loadu_si512((void const*)&Bk[w]);
+                            _mm512_storeu_si512((void*)&Ci[w], _mm512_xor_si512(vC, vB));
+                        }
+                        #endif
+                        #if defined(__aarch64__) || defined(__arm64__)
+                        for (; w + 2 <= wordsB; w += 2) {
+                            uint64x2_t vC = vld1q_u64(&Ci[w]);
+                            uint64x2_t vB = vld1q_u64(&Bk[w]);
+                            vst1q_u64(&Ci[w], veorq_u64(vC, vB));
+                        }
+                        #endif
+                        for (; w < wordsB; ++w) Ci[w] ^= Bk[w];
                     }
                 }
             }
@@ -171,5 +208,4 @@ void mexFunction(int nlhs, mxArray *plhs[],
     }
 
     mxFree(Bpack);
-    /* mxFree(Cblock); // Freed inside loop */
 }

@@ -128,8 +128,8 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
     if (nrhs != 1) {
         mexErrMsgIdAndTxt("bitrank_mex:nargin", "One input required.");
     }
-    if (!mxIsLogical(prhs[0])) {
-        mexErrMsgIdAndTxt("bitrank_mex:inputNotLogical", "Input must be a logical matrix.");
+    if (!mxIsLogical(prhs[0]) && !mxIsDouble(prhs[0])) {
+        mexErrMsgIdAndTxt("bitrank_mex:inputNotLogical", "Input must be a logical or double matrix.");
     }
 
     // Retrieve Matrix Dimensions
@@ -141,7 +141,8 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
     mwSize words_per_row = (n_col + bits_per_word - 1) / bits_per_word;
 
     // Access Input Matrix Data
-    const unsigned char *input_mat = (const unsigned char*)mxGetLogicals(prhs[0]);
+    int is_double = mxIsDouble(prhs[0]);
+    const void *input_mat = mxGetData(prhs[0]);
 
     // Allocate Bit-Packed Matrix
     uint64_t *mat_packed = (uint64_t*)mxCalloc(n_row * words_per_row, sizeof(uint64_t));
@@ -150,12 +151,26 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
     }
 
     // Pack the input matrix into mat_packed
-    for (mwSize row = 0; row < n_row; row++) {
-        for (mwSize col_idx = 0; col_idx < n_col; col_idx++) {
-            if (input_mat[row + col_idx * n_row]) { // MATLAB is column-major
-                mwSize word_idx = col_idx / bits_per_word;
-                mwSize bit_idx = col_idx % bits_per_word;
-                mat_packed[row * words_per_row + word_idx] |= ((uint64_t)1) << bit_idx;
+    if (is_double) {
+        const double *input_dbl = (const double*)input_mat;
+        for (mwSize row = 0; row < n_row; row++) {
+            for (mwSize col_idx = 0; col_idx < n_col; col_idx++) {
+                if (((int)input_dbl[row + col_idx * n_row]) & 1) { // Check parity
+                    mwSize word_idx = col_idx / bits_per_word;
+                    mwSize bit_idx = col_idx % bits_per_word;
+                    mat_packed[row * words_per_row + word_idx] |= ((uint64_t)1) << bit_idx;
+                }
+            }
+        }
+    } else {
+        const mxLogical *input_log = (const mxLogical*)input_mat;
+        for (mwSize row = 0; row < n_row; row++) {
+            for (mwSize col_idx = 0; col_idx < n_col; col_idx++) {
+                if (input_log[row + col_idx * n_row]) { // MATLAB is column-major
+                    mwSize word_idx = col_idx / bits_per_word;
+                    mwSize bit_idx = col_idx % bits_per_word;
+                    mat_packed[row * words_per_row + word_idx] |= ((uint64_t)1) << bit_idx;
+                }
             }
         }
     }

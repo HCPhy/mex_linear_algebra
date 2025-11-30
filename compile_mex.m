@@ -63,7 +63,7 @@ end
 % 1. gf2_matmul_mex
 fprintf('Compiling gf2_matmul_mex.c...\n');
 try
-    mex(flags{:}, 'gf2_matmul_mex.c');
+    mex(flags{:}, '-outdir', 'bin', fullfile('src', 'gf2_matmul_mex.c'));
     fprintf('  Success.\n');
 catch ME
     fprintf('  FAILED: %s\n', ME.message);
@@ -72,7 +72,7 @@ end
 % 2. null_gf2_mex
 fprintf('Compiling null_gf2_mex.c...\n');
 try
-    mex(flags{:}, 'null_gf2_mex.c');
+    mex(flags{:}, '-outdir', 'bin', fullfile('src', 'null_gf2_mex.c'));
     fprintf('  Success.\n');
 catch ME
     fprintf('  FAILED: %s\n', ME.message);
@@ -81,13 +81,99 @@ end
 % 3. bitrank_mex
 fprintf('Compiling bitrank_mex.c...\n');
 try
-    mex(flags{:}, 'bitrank_mex.c');
+    mex(flags{:}, '-outdir', 'bin', fullfile('src', 'bitrank_mex.c'));
     fprintf('  Success.\n');
 catch ME
     fprintf('  FAILED: %s\n', ME.message);
 end
 
+fprintf('Done compiling.\n');
 
-fprintf('Done.\n');
+%% Testing
+addpath(fullfile(scriptDir, 'bin')); % Add bin to path for testing
+
+%% Testing
+fprintf('\n----------------------------------------\n');
+fprintf('Running Tests...\n');
+fprintf('----------------------------------------\n');
+
+% 1. Test gf2_matmul_mex
+fprintf('Testing gf2_matmul_mex...\n');
+try
+    A = logical(randi([0, 1], 100, 50));
+    B = logical(randi([0, 1], 50, 30));
+    C_mex = gf2_matmul_mex(A, B);
+    C_ref = mod(double(A) * double(B), 2);
+    if isequal(C_mex, C_ref)
+        fprintf('  [PASSED] Matrix multiplication matches MATLAB reference.\n');
+    else
+        fprintf('  [FAILED] Matrix multiplication mismatch.\n');
+        error('gf2_matmul_mex failed verification.');
+    end
+catch ME
+    fprintf('  [ERROR] %s\n', ME.message);
+end
+
+% 2. Test null_gf2_mex
+fprintf('Testing null_gf2_mex...\n');
+try
+    A = logical(randi([0, 1], 50, 100)); % Fat matrix usually has null space
+    Z = null_gf2_mex(A);
+
+    % Check dimensions
+    [~, n] = size(A);
+    [nz_rows, ~] = size(Z);
+    if nz_rows ~= n
+        fprintf('  [FAILED] Null space matrix has wrong number of rows.\n');
+    else
+        % Verify A * Z = 0
+        prod = gf2_matmul_mex(A, Z);
+        if all(prod(:) == 0)
+            fprintf('  [PASSED] A * Z is zero matrix.\n');
+        else
+            fprintf('  [FAILED] A * Z is NOT zero matrix.\n');
+            error('null_gf2_mex failed verification.');
+        end
+    end
+catch ME
+    fprintf('  [ERROR] %s\n', ME.message);
+end
+
+% 3. Test bitrank_mex
+fprintf('Testing bitrank_mex...\n');
+try
+    % Random matrix consistency check (Rank(A) == Rank(A'))
+    A = logical(randi([0, 1], 50, 50));
+    r_A = bitrank_mex(A);
+    r_AT = bitrank_mex(A');
+    if r_A == r_AT
+        fprintf('  [PASSED] Rank consistency check (Rank(A) == Rank(A'')). Rank = %d\n', r_A);
+    else
+        fprintf('  [FAILED] Rank consistency mismatch: Rank(A)=%d, Rank(A'')=%d\n', r_A, r_AT);
+        error('bitrank_mex failed verification.');
+    end
+
+    % Zero matrix - rank should be 0
+    Z = logical(zeros(10));
+    r_Z = bitrank_mex(Z);
+    if r_Z == 0
+        fprintf('  [PASSED] Rank of zero matrix is correct.\n');
+    else
+        fprintf('  [FAILED] Rank of zero matrix is %d (expected 0).\n', r_Z);
+    end
+
+    % Random matrix sanity check
+    A = logical(randi([0, 1], 50, 50));
+    r = bitrank_mex(A);
+    if r <= 50 && r >= 0
+        fprintf('  [PASSED] Rank of random matrix is within bounds.\n');
+    else
+        fprintf('  [FAILED] Rank of random matrix is out of bounds: %d\n', r);
+    end
+catch ME
+    fprintf('  [ERROR] %s\n', ME.message);
+end
+
+fprintf('\nAll tests completed.\n');
 
 end

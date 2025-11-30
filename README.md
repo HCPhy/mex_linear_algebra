@@ -61,6 +61,16 @@ A = randi([0, 1], 100, 100);
 r = bitrank_mex(A);
 ```
 
+## Benchmarks
+
+To verify performance, run the `benchmark_mex.m` script. This compares the MEX functions against MATLAB's native GF(2) operations (`gf` array, `rank`, `gf2null`).
+
+```matlab
+benchmark_mex
+```
+
+![Benchmark Results](benchmark_results.png)
+
 ## Performance Notes
 
 - **Linux (x86_64)**: Uses AVX512 if available, otherwise AVX2. OpenMP is enabled by default.

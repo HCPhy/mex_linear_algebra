@@ -142,33 +142,84 @@ end
 % 3. Test bitrank_mex
 fprintf('Testing bitrank_mex...\n');
 try
-    % Random matrix consistency check (Rank(A) == Rank(A'))
-    A = logical(randi([0, 1], 50, 50));
-    r_A = bitrank_mex(A);
-    r_AT = bitrank_mex(A');
-    if r_A == r_AT
-        fprintf('  [PASSED] Rank consistency check (Rank(A) == Rank(A'')). Rank = %d\n', r_A);
-    else
-        fprintf('  [FAILED] Rank consistency mismatch: Rank(A)=%d, Rank(A'')=%d\n', r_A, r_AT);
-        error('bitrank_mex failed verification.');
-    end
+    % Check if gfrank is available (MATLAB R2023b+)
+    has_gfrank = exist('gfrank', 'builtin') || exist('gfrank', 'file');
 
-    % Zero matrix - rank should be 0
-    Z = logical(zeros(10));
-    r_Z = bitrank_mex(Z);
-    if r_Z == 0
-        fprintf('  [PASSED] Rank of zero matrix is correct.\n');
-    else
-        fprintf('  [FAILED] Rank of zero matrix is %d (expected 0).\n', r_Z);
-    end
+    if has_gfrank
+        fprintf('  Using gfrank(A, 2) as reference implementation.\n');
 
-    % Random matrix sanity check
-    A = logical(randi([0, 1], 50, 50));
-    r = bitrank_mex(A);
-    if r <= 50 && r >= 0
-        fprintf('  [PASSED] Rank of random matrix is within bounds.\n');
+        % Test against gfrank for various matrices
+        % Test 1: Random matrix
+        A = logical(randi([0, 1], 50, 50));
+        r_mex = bitrank_mex(A);
+        r_ref = gfrank(A, 2);
+        if r_mex == r_ref
+            fprintf('  [PASSED] Random matrix rank matches gfrank. Rank = %d\n', r_mex);
+        else
+            fprintf('  [FAILED] Random matrix rank mismatch: bitrank_mex=%d, gfrank=%d\n', r_mex, r_ref);
+            error('bitrank_mex failed verification against gfrank.');
+        end
+
+        % Test 2: Zero matrix
+        Z = false(10);
+        r_Z = bitrank_mex(Z);
+        r_Z_ref = gfrank(Z, 2);
+        if r_Z == r_Z_ref && r_Z == 0
+            fprintf('  [PASSED] Zero matrix rank matches gfrank. Rank = %d\n', r_Z);
+        else
+            fprintf('  [FAILED] Zero matrix rank: bitrank_mex=%d, gfrank=%d\n', r_Z, r_Z_ref);
+        end
+
+        % Test 3: Identity matrix
+        I = eye(20, 'logical');
+        r_I = bitrank_mex(I);
+        r_I_ref = gfrank(I, 2);
+        if r_I == r_I_ref && r_I == 20
+            fprintf('  [PASSED] Identity matrix rank matches gfrank. Rank = %d\n', r_I);
+        else
+            fprintf('  [FAILED] Identity matrix rank: bitrank_mex=%d, gfrank=%d\n', r_I, r_I_ref);
+        end
+
+        % Test 4: Transpose consistency
+        A = logical(randi([0, 1], 50, 50));
+        r_A = bitrank_mex(A);
+        r_AT = bitrank_mex(A');
+        if r_A == r_AT
+            fprintf('  [PASSED] Rank consistency check (Rank(A) == Rank(A'')). Rank = %d\n', r_A);
+        else
+            fprintf('  [FAILED] Rank consistency mismatch: Rank(A)=%d, Rank(A'')=%d\n', r_A, r_AT);
+        end
     else
-        fprintf('  [FAILED] Rank of random matrix is out of bounds: %d\n', r);
+        fprintf('  gfrank not available. Using consistency checks.\n');
+
+        % Random matrix consistency check (Rank(A) == Rank(A'))
+        A = logical(randi([0, 1], 50, 50));
+        r_A = bitrank_mex(A);
+        r_AT = bitrank_mex(A');
+        if r_A == r_AT
+            fprintf('  [PASSED] Rank consistency check (Rank(A) == Rank(A'')). Rank = %d\n', r_A);
+        else
+            fprintf('  [FAILED] Rank consistency mismatch: Rank(A)=%d, Rank(A'')=%d\n', r_A, r_AT);
+            error('bitrank_mex failed verification.');
+        end
+
+        % Zero matrix - rank should be 0
+        Z = false(10);
+        r_Z = bitrank_mex(Z);
+        if r_Z == 0
+            fprintf('  [PASSED] Rank of zero matrix is correct.\n');
+        else
+            fprintf('  [FAILED] Rank of zero matrix is %d (expected 0).\n', r_Z);
+        end
+
+        % Random matrix sanity check
+        A = logical(randi([0, 1], 50, 50));
+        r = bitrank_mex(A);
+        if r <= 50 && r >= 0
+            fprintf('  [PASSED] Rank of random matrix is within bounds.\n');
+        else
+            fprintf('  [FAILED] Rank of random matrix is out of bounds: %d\n', r);
+        end
     end
 catch ME
     fprintf('  [ERROR] %s\n', ME.message);

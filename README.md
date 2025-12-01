@@ -6,9 +6,9 @@ All functions support both **logical** (boolean) and **double** (integer) input 
 
 ## Features
 
-- **`gf2_matmul_mex`**: Fast matrix multiplication over GF(2).
-- **`null_gf2_mex`**: Efficient computation of the null space of a binary matrix.
-- **`bitrank_mex`**: High-speed rank calculation for binary matrices.
+- **`mela_matmul_gf2`**: Fast matrix multiplication over GF(2).
+- **`mela_null_gf2`**: Efficient computation of the null space of a binary matrix.
+- **`mela_rank_gf2`**: High-speed rank calculation for binary matrices.
 
 ## Prerequisites
 
@@ -32,33 +32,33 @@ The script will:
 
 ## Usage
 
-### Matrix Multiplication (`gf2_matmul_mex`)
+### Matrix Multiplication (`mela_matmul_gf2`)
 
 Computes $C = A \times B$ over GF(2). Accepts `logical` or `double` matrices.
 
 ```matlab
 A = randi([0, 1], 100, 100); % double matrix
 B = randi([0, 1], 100, 50);
-C = gf2_matmul_mex(A, B);
+C = mela_matmul_gf2(A, B);
 ```
 
-### Null Space (`null_gf2_mex`)
+### Null Space (`mela_null_gf2`)
 
 Computes a basis for the null space of matrix $A$, such that $A \times Z = 0$ over GF(2).
 
 ```matlab
 A = randi([0, 1], 50, 100);
-Z = null_gf2_mex(A);
-% Verify: gf2_matmul_mex(A, Z) should be all zeros.
+Z = mela_null_gf2(A);
+% Verify: mela_matmul_gf2(A, Z) should be all zeros.
 ```
 
-### Rank (`bitrank_mex`)
+### Rank (`mela_rank_gf2`)
 
 Computes the rank of a binary matrix over GF(2).
 
 ```matlab
 A = randi([0, 1], 100, 100);
-r = bitrank_mex(A);
+r = mela_rank_gf2(A);
 ```
 
 ## Benchmarks

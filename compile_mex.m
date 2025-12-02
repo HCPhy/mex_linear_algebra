@@ -87,6 +87,15 @@ catch ME
     fprintf('  FAILED: %s\n', ME.message);
 end
 
+% 4. mela_rank_m4ri
+fprintf('Compiling mela_rank_m4ri.c...\n');
+try
+    mex(flags{:}, '-outdir', 'bin', fullfile('src', 'mela_rank_m4ri.c'));
+    fprintf('  Success.\n');
+catch ME
+    fprintf('  FAILED: %s\n', ME.message);
+end
+
 fprintf('Done compiling.\n');
 
 %% Testing
@@ -225,7 +234,61 @@ catch ME
     fprintf('  [ERROR] %s\n', ME.message);
 end
 
-% 4. Test Double/Integer Inputs
+% 4. Test mela_rank_m4ri
+fprintf('Testing mela_rank_m4ri...\n');
+try
+    % Check if gfrank is available (MATLAB R2023b+)
+    has_gfrank = exist('gfrank', 'builtin') || exist('gfrank', 'file');
+
+    if has_gfrank
+        fprintf('  Using gfrank(A, 2) as reference implementation.\n');
+
+        % Test 1: Random matrix
+        A = logical(randi([0, 1], 64, 64)); % Use multiple of 8 for M4RI check
+        r_mex = mela_rank_m4ri(A);
+        r_ref = gfrank(A, 2);
+        if r_mex == r_ref
+            fprintf('  [PASSED] Random matrix rank matches gfrank. Rank = %d\n', r_mex);
+        else
+            fprintf('  [FAILED] Random matrix rank mismatch: mela_rank_m4ri=%d, gfrank=%d\n', r_mex, r_ref);
+            error('mela_rank_m4ri failed verification against gfrank.');
+        end
+
+        % Test 2: Consistency with mela_rank_gf2
+        r_gf2 = mela_rank_gf2(A);
+        if r_mex == r_gf2
+            fprintf('  [PASSED] Consistent with mela_rank_gf2.\n');
+        else
+            fprintf('  [FAILED] Inconsistent with mela_rank_gf2: M4RI=%d, Basic=%d\n', r_mex, r_gf2);
+        end
+
+    else
+        fprintf('  gfrank not available. Using consistency checks.\n');
+
+        % Random matrix consistency check (Rank(A) == Rank(A'))
+        A = logical(randi([0, 1], 64, 64));
+        r_A = mela_rank_m4ri(A);
+        r_AT = mela_rank_m4ri(A');
+        if r_A == r_AT
+            fprintf('  [PASSED] Rank consistency check (Rank(A) == Rank(A'')). Rank = %d\n', r_A);
+        else
+            fprintf('  [FAILED] Rank consistency mismatch: Rank(A)=%d, Rank(A'')=%d\n', r_A, r_AT);
+            error('mela_rank_m4ri failed verification.');
+        end
+
+        % Consistency with mela_rank_gf2
+        r_basic = mela_rank_gf2(A);
+        if r_A == r_basic
+            fprintf('  [PASSED] Consistent with mela_rank_gf2.\n');
+        else
+            fprintf('  [FAILED] Inconsistent with mela_rank_gf2: M4RI=%d, Basic=%d\n', r_A, r_basic);
+        end
+    end
+catch ME
+    fprintf('  [ERROR] %s\n', ME.message);
+end
+
+% 5. Test Double/Integer Inputs
 fprintf('Testing Double/Integer Inputs...\n');
 try
     % mela_matmul_gf2 with doubles

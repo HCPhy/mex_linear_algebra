@@ -9,6 +9,7 @@ All functions support both **logical** (boolean) and **double** (integer) input 
 - **`mela_matmul_gf2`**: Fast matrix multiplication over GF(2).
 - **`mela_null_gf2`**: Efficient computation of the null space of a binary matrix.
 - **`mela_rank_gf2`**: High-speed rank calculation for binary matrices.
+- **`mela_rank_m4ri`**: **[NEW]** "Best Practice" rank calculation using the M4RI algorithm (Method of the Four Russians), offering superior performance for large matrices.
 
 ## Prerequisites
 

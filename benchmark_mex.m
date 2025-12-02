@@ -81,6 +81,7 @@ end
 %% Benchmark 2: Rank Computation
 fprintf('\nBenchmarking mela_rank_gf2...\n');
 times_mex_rank = zeros(size(sizes));
+times_m4ri_rank = zeros(size(sizes));
 times_builtin_rank = zeros(size(sizes));
 
 if has_gf
@@ -94,6 +95,7 @@ if has_gf
 
         % Compute results
         r_mex = mela_rank_gf2(A);
+        r_m4ri = mela_rank_m4ri(A);
         r_matlab = rank(gf(A, 1));
 
         % Verify correctness
@@ -102,18 +104,30 @@ if has_gf
             fprintf('  [MISMATCH] Skipping this size.\n');
             continue;
         end
+        if r_m4ri ~= r_matlab
+            warning('Size %dx%d: M4RI Rank mismatch! M4RI=%d, MATLAB=%d', n, n, r_m4ri, r_matlab);
+            fprintf('  [MISMATCH] Skipping this size.\n');
+            continue;
+        end
 
         % Benchmark MEX function
         t_mex = timeit(@() mela_rank_gf2(A), 1);
         times_mex_rank(i) = t_mex;
+
+        % Benchmark M4RI function
+        t_m4ri = timeit(@() mela_rank_m4ri(A), 1);
+        times_m4ri_rank(i) = t_m4ri;
 
         % Benchmark MATLAB GF(2) rank
         t_builtin = timeit(@() rank(gf(A, 1)), 1);
         times_builtin_rank(i) = t_builtin;
 
         speedup = t_builtin / t_mex;
-        fprintf('MEX: %.4f ms, MATLAB gf: %.4f ms, Speedup: %.2fx [VERIFIED]\n', ...
-            t_mex*1000, t_builtin*1000, speedup);
+        speedup_m4ri = t_builtin / t_m4ri;
+        speedup_vs_mex = t_mex / t_m4ri;
+        fprintf('MEX: %.4f ms, M4RI: %.4f ms, MATLAB gf: %.4f ms\n', t_mex*1000, t_m4ri*1000, t_builtin*1000);
+        fprintf('  Speedup vs MATLAB: MEX %.2fx, M4RI %.2fx\n', speedup, speedup_m4ri);
+        fprintf('  M4RI vs MEX: %.2fx faster\n', speedup_vs_mex);
     end
 else
     fprintf('  gf not available (needs Communications Toolbox) - benchmarking MEX only.\n');
@@ -124,12 +138,26 @@ else
         % Generate random test matrix
         A = logical(randi([0, 1], n, n));
 
+        % Verify consistency between MEX versions
+        r_mex = mela_rank_gf2(A);
+        r_m4ri = mela_rank_m4ri(A);
+        if r_mex ~= r_m4ri
+            warning('Size %dx%d: Rank mismatch! MEX=%d, M4RI=%d', n, n, r_mex, r_m4ri);
+        end
+
         % Benchmark MEX function
         t_mex = timeit(@() mela_rank_gf2(A), 1);
         times_mex_rank(i) = t_mex;
+
+        % Benchmark M4RI function
+        t_m4ri = timeit(@() mela_rank_m4ri(A), 1);
+        times_m4ri_rank(i) = t_m4ri;
+
         times_builtin_rank(i) = NaN;
 
-        fprintf('MEX: %.4f ms\n', t_mex*1000);
+        speedup_vs_mex = t_mex / t_m4ri;
+        fprintf('MEX: %.4f ms, M4RI: %.4f ms\n', t_mex*1000, t_m4ri*1000);
+        fprintf('  M4RI vs MEX: %.2fx faster\n', speedup_vs_mex);
     end
 end
 
@@ -224,8 +252,9 @@ set(gca, 'XScale', 'log', 'YScale', 'log');
 
 % Plot 2: Rank Computation
 subplot(1, 3, 2);
-plot(sizes, times_mex_rank*1000, 'o-', 'LineWidth', 2, 'MarkerSize', 8, 'DisplayName', 'MEX');
+plot(sizes, times_mex_rank*1000, 'o-', 'LineWidth', 2, 'MarkerSize', 8, 'DisplayName', 'MEX (Row Reduction)');
 hold on;
+plot(sizes, times_m4ri_rank*1000, '^-', 'LineWidth', 2, 'MarkerSize', 8, 'DisplayName', 'MEX (M4RI)');
 if has_gf
     plot(sizes, times_builtin_rank*1000, 's-', 'LineWidth', 2, 'MarkerSize', 8, 'DisplayName', 'MATLAB gf');
 end
@@ -233,9 +262,7 @@ hold off;
 xlabel('Matrix Size (n×n)');
 ylabel('Time (ms)');
 title('GF(2) Rank Computation');
-if has_gf
-    legend('Location', 'northwest');
-end
+legend('Location', 'northwest');
 grid on;
 set(gca, 'XScale', 'log', 'YScale', 'log');
 

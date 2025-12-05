@@ -69,16 +69,7 @@ catch ME
     fprintf('  FAILED: %s\n', ME.message);
 end
 
-% 2. mela_null_gf2
-fprintf('Compiling mela_null_gf2.c...\n');
-try
-    mex(flags{:}, '-outdir', 'bin', fullfile('src', 'mela_null_gf2.c'));
-    fprintf('  Success.\n');
-catch ME
-    fprintf('  FAILED: %s\n', ME.message);
-end
-
-% 3. mela_rank_gf2
+% 2. mela_rank_gf2
 fprintf('Compiling mela_rank_gf2.c...\n');
 try
     mex(flags{:}, '-outdir', 'bin', fullfile('src', 'mela_rank_gf2.c'));
@@ -91,6 +82,33 @@ end
 fprintf('Compiling mela_rank_m4ri.c...\n');
 try
     mex(flags{:}, '-outdir', 'bin', fullfile('src', 'mela_rank_m4ri.c'));
+    fprintf('  Success.\n');
+catch ME
+    fprintf('  FAILED: %s\n', ME.message);
+end
+
+% 5. mela_matmul_m4ri
+fprintf('Compiling mela_matmul_m4ri.c...\n');
+try
+    mex(flags{:}, '-outdir', 'bin', fullfile('src', 'mela_matmul_m4ri.c'));
+    fprintf('  Success.\n');
+catch ME
+    fprintf('  FAILED: %s\n', ME.message);
+end
+
+% 6. mela_null_m4ri
+fprintf('Compiling mela_null_m4ri.c...\n');
+try
+    mex(flags{:}, '-outdir', 'bin', fullfile('src', 'mela_null_m4ri.c'));
+    fprintf('  Success.\n');
+catch ME
+    fprintf('  FAILED: %s\n', ME.message);
+end
+
+% 7. mela_null_gf2
+fprintf('Compiling mela_null_gf2.c...\n');
+try
+    mex(flags{:}, '-outdir', 'bin', fullfile('src', 'mela_null_gf2.c'));
     fprintf('  Success.\n');
 catch ME
     fprintf('  FAILED: %s\n', ME.message);
@@ -123,32 +141,65 @@ catch ME
     fprintf('  [ERROR] %s\n', ME.message);
 end
 
-% 2. Test mela_null_gf2
-fprintf('Testing mela_null_gf2...\n');
+% 2. Test mela_matmul_m4ri
+fprintf('Testing mela_matmul_m4ri...\n');
 try
-    A = logical(randi([0, 1], 50, 100)); % Fat matrix usually has null space
-    Z = mela_null_gf2(A);
+    A = logical(randi([0, 1], 256, 128));
+    B = logical(randi([0, 1], 128, 64));
 
-    % Check dimensions
-    [~, n] = size(A);
-    [nz_rows, ~] = size(Z);
-    if nz_rows ~= n
-        fprintf('  [FAILED] Null space matrix has wrong number of rows.\n');
+    % Compare against mela_matmul_gf2 (assumed correct from previous test)
+    C_m4ri = mela_matmul_m4ri(A, B);
+    C_gf2  = mela_matmul_gf2(A, B);
+
+    if isequal(C_m4ri, C_gf2)
+        fprintf('  [PASSED] M4RI Matmul matches mela_matmul_gf2.\n');
     else
-        % Verify A * Z = 0
-        prod = mela_matmul_gf2(A, Z);
-        if all(prod(:) == 0)
-            fprintf('  [PASSED] A * Z is zero matrix.\n');
-        else
-            fprintf('  [FAILED] A * Z is NOT zero matrix.\n');
-            error('mela_null_gf2 failed verification.');
-        end
+        fprintf('  [FAILED] M4RI Matmul mismatch.\n');
+        error('mela_matmul_m4ri failed verification.');
     end
 catch ME
     fprintf('  [ERROR] %s\n', ME.message);
 end
 
-% 3. Test mela_rank_gf2
+% 3. Test mela_null_m4ri, mela_null_gf2
+fprintf('Testing Null Space Functions...\n');
+try
+    A = logical(randi([0, 1], 50, 100)); % Fat matrix usually has null space
+    [~, n] = size(A);
+
+    % Test mela_null_m4ri
+    Z_m4ri = mela_null_m4ri(A);
+    [nz_rows_m4ri, ~] = size(Z_m4ri);
+    if nz_rows_m4ri ~= n
+        fprintf('  [FAILED] mela_null_m4ri: wrong number of rows.\n');
+    else
+        prod = mela_matmul_gf2(A, Z_m4ri);
+        if all(prod(:) == 0)
+            fprintf('  [PASSED] mela_null_m4ri: A * Z is zero matrix.\n');
+        else
+            fprintf('  [FAILED] mela_null_m4ri: A * Z is NOT zero matrix.\n');
+        end
+    end
+
+    % Test mela_null_gf2
+    Z_bp = mela_null_gf2(A);
+    [nz_rows_bp, ~] = size(Z_bp);
+    if nz_rows_bp ~= n
+        fprintf('  [FAILED] mela_null_gf2: wrong number of rows.\n');
+    else
+        prod = mela_matmul_gf2(A, Z_bp);
+        if all(prod(:) == 0)
+            fprintf('  [PASSED] mela_null_gf2: A * Z is zero matrix.\n');
+        else
+            fprintf('  [FAILED] mela_null_gf2: A * Z is NOT zero matrix.\n');
+        end
+    end
+
+catch ME
+    fprintf('  [ERROR] %s\n', ME.message);
+end
+
+% 4. Test mela_rank_gf2
 fprintf('Testing mela_rank_gf2...\n');
 try
     % Check if gfrank is available (MATLAB R2023b+)
@@ -234,7 +285,7 @@ catch ME
     fprintf('  [ERROR] %s\n', ME.message);
 end
 
-% 4. Test mela_rank_m4ri
+% 5. Test mela_rank_m4ri
 fprintf('Testing mela_rank_m4ri...\n');
 try
     % Check if gfrank is available (MATLAB R2023b+)
@@ -288,7 +339,7 @@ catch ME
     fprintf('  [ERROR] %s\n', ME.message);
 end
 
-% 5. Test Double/Integer Inputs
+% 6. Test Double/Integer Inputs
 fprintf('Testing Double/Integer Inputs...\n');
 try
     % mela_matmul_gf2 with doubles

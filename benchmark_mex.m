@@ -20,7 +20,7 @@ if exist(fullfile(scriptDir, 'gf2null'), 'dir')
 end
 
 % Configuration
-sizes = [32, 64, 128, 256, 512, 1024];
+sizes = [32, 64, 128, 256, 512, 1024, 2048];
 
 % Check dependencies
 if ~exist('mela_matmul_gf2', 'file') || ...
@@ -43,6 +43,7 @@ fprintf('========================================\n\n');
 %% Benchmark 1: GF(2) Matrix Multiplication
 fprintf('Benchmarking mela_matmul_gf2...\n');
 times_mex_matmul = zeros(size(sizes));
+times_m4ri_matmul = zeros(size(sizes));
 times_builtin_matmul = zeros(size(sizes));
 
 for i = 1:length(sizes)
@@ -55,6 +56,7 @@ for i = 1:length(sizes)
 
     % Compute results
     C_mex = mela_matmul_gf2(A, B);
+    C_m4ri = mela_matmul_m4ri(A, B);
     C_gf = gf(A, 1) * gf(B, 1);
     C_matlab = C_gf.x;
 
@@ -64,18 +66,28 @@ for i = 1:length(sizes)
         fprintf('  [MISMATCH] Skipping this size.\n');
         continue;
     end
+    if ~isequal(C_m4ri, C_matlab)
+        warning('Size %dx%d: M4RI Results do not match!', n, n);
+        fprintf('  [MISMATCH] Skipping this size.\n');
+        continue;
+    end
 
     % Benchmark MEX function
     t_mex = timeit(@() mela_matmul_gf2(A, B), 1);
     times_mex_matmul(i) = t_mex;
+
+    % Benchmark M4RI function
+    t_m4ri = timeit(@() mela_matmul_m4ri(A, B), 1);
+    times_m4ri_matmul(i) = t_m4ri;
 
     % Benchmark MATLAB GF(2) matrix multiplication
     t_builtin = timeit(@() gf(A, 1) * gf(B, 1), 1);
     times_builtin_matmul(i) = t_builtin;
 
     speedup = t_builtin / t_mex;
-    fprintf('MEX: %.4f ms, MATLAB: %.4f ms, Speedup: %.2fx [VERIFIED]\n', ...
-        t_mex*1000, t_builtin*1000, speedup);
+    speedup_m4ri = t_builtin / t_m4ri;
+    fprintf('MEX: %.4f ms, M4RI: %.4f ms, MATLAB: %.4f ms\n', t_mex*1000, t_m4ri*1000, t_builtin*1000);
+    fprintf('  Speedup vs MATLAB: MEX %.2fx, M4RI %.2fx\n', speedup, speedup_m4ri);
 end
 
 %% Benchmark 2: Rank Computation
@@ -164,6 +176,8 @@ end
 %% Benchmark 3: Null Space Computation
 fprintf('\nBenchmarking mela_null_gf2...\n');
 times_mex_null = zeros(size(sizes));
+times_m4ri_null = zeros(size(sizes));
+times_bp_null = zeros(size(sizes));
 times_builtin_null = zeros(size(sizes));
 
 if has_gf
@@ -177,16 +191,27 @@ if has_gf
         A = logical(randi([0, 1], m, n));
 
         % Compute results
-        Z_mex = mela_null_gf2(A);
+        Z_m4ri = mela_null_m4ri(A);
+        Z_bp = mela_null_gf2(A);
         % Use gf2null for proper GF(2) null space computation
         Z_gf = gf2null(gf(A, 1));
 
-        % Verify correctness: Both should satisfy A*Z = 0 in GF(2)
-        if ~isempty(Z_mex)
-            prod_mex = mela_matmul_gf2(A, Z_mex);
-            if ~all(prod_mex(:) == 0)
-                warning('Size %dx%d: MEX null space verification failed!', m, n);
-                fprintf('  [MISMATCH] A*Z_mex is not zero. Skipping.\n');
+
+
+        if ~isempty(Z_m4ri)
+            prod_m4ri = mela_matmul_gf2(A, Z_m4ri);
+            if ~all(prod_m4ri(:) == 0)
+                warning('Size %dx%d: M4RI null space verification failed!', m, n);
+                fprintf('  [MISMATCH] A*Z_m4ri is not zero. Skipping.\n');
+                continue;
+            end
+        end
+
+        if ~isempty(Z_bp)
+            prod_bp = mela_matmul_gf2(A, Z_bp);
+            if ~all(prod_bp(:) == 0)
+                warning('Size %dx%d: BP null space verification failed!', m, n);
+                fprintf('  [MISMATCH] A*Z_bp is not zero. Skipping.\n');
                 continue;
             end
         end
@@ -201,16 +226,26 @@ if has_gf
             end
         end
 
-        % Benchmark MEX function
-        t_mex = timeit(@() mela_null_gf2(A), 1);
-        times_mex_null(i) = t_mex;
+        % Benchmark M4RI function
+        t_m4ri = timeit(@() mela_null_m4ri(A), 1);
+        times_m4ri_null(i) = t_m4ri;
+
+        t_bp = timeit(@() mela_null_gf2(A), 1);
+        times_bp_null(i) = t_bp;
+
         % Benchmark MATLAB GF(2) null space using gf2null
         t_builtin = timeit(@() gf2null(gf(A, 1)), 1);
         times_builtin_null(i) = t_builtin;
 
-        speedup = t_builtin / t_mex;
-        fprintf('MEX: %.4f ms, MATLAB: %.4f ms, Speedup: %.2fx [VERIFIED]\n', ...
-            t_mex*1000, t_builtin*1000, speedup);
+        speedup_m4ri = t_builtin / t_m4ri;
+        speedup_bp = t_builtin / t_bp;
+
+        % Benchmark MEX function (mela_null_gf2)
+        t_mex = timeit(@() mela_null_gf2(A), 1);
+        times_mex_null(i) = t_mex;
+
+        fprintf('MEX: %.4f ms, M4RI: %.4f ms, GF2 (BP): %.4f ms, MATLAB gf: %.4f ms\n', t_mex*1000, t_m4ri*1000, t_bp*1000, t_builtin*1000);
+        fprintf('  Speedup vs MATLAB: M4RI %.2fx, GF2 (BP) %.2fx\n', speedup_m4ri, speedup_bp);
     end
 else
     fprintf('  gf not available (needs Communications Toolbox) - benchmarking MEX only.\n');
@@ -222,12 +257,15 @@ else
         % Generate random test matrix
         A = logical(randi([0, 1], m, n));
 
-        % Benchmark MEX function
-        t_mex = timeit(@() mela_null_gf2(A), 1);
-        times_mex_null(i) = t_mex;
+        t_m4ri = timeit(@() mela_null_m4ri(A), 1);
+        times_m4ri_null(i) = t_m4ri;
+
+        t_bp = timeit(@() mela_null_gf2(A), 1);
+        times_bp_null(i) = t_bp;
+
         times_builtin_null(i) = NaN;
 
-        fprintf('MEX: %.4f ms\n', t_mex*1000);
+        fprintf('M4RI: %.4f ms, GF2 (BP): %.4f ms\n', t_m4ri*1000, t_bp*1000);
     end
 end
 
@@ -239,8 +277,9 @@ fig = figure('Position', [100, 100, 1400, 500]);
 
 % Plot 1: Matrix Multiplication
 subplot(1, 3, 1);
-plot(sizes, times_mex_matmul*1000, 'o-', 'LineWidth', 2, 'MarkerSize', 8, 'DisplayName', 'MEX');
+plot(sizes, times_mex_matmul*1000, 'o-', 'LineWidth', 2, 'MarkerSize', 8, 'DisplayName', 'MEX (Bit-Packed)');
 hold on;
+plot(sizes, times_m4ri_matmul*1000, '^-', 'LineWidth', 2, 'MarkerSize', 8, 'DisplayName', 'MEX (M4RI)');
 plot(sizes, times_builtin_matmul*1000, 's-', 'LineWidth', 2, 'MarkerSize', 8, 'DisplayName', 'MATLAB');
 hold off;
 xlabel('Matrix Size (n×n)');
@@ -268,8 +307,9 @@ set(gca, 'XScale', 'log', 'YScale', 'log');
 
 % Plot 3: Null Space Computation
 subplot(1, 3, 3);
-plot(sizes, times_mex_null*1000, 'o-', 'LineWidth', 2, 'MarkerSize', 8, 'DisplayName', 'MEX');
+plot(sizes, times_m4ri_null*1000, '^-', 'LineWidth', 2, 'MarkerSize', 8, 'DisplayName', 'MEX (M4RI)');
 hold on;
+plot(sizes, times_bp_null*1000, 'x-', 'LineWidth', 2, 'MarkerSize', 8, 'DisplayName', 'MEX (Bit-Packed)');
 if has_gf
     plot(sizes, times_builtin_null*1000, 's-', 'LineWidth', 2, 'MarkerSize', 8, 'DisplayName', 'MATLAB gf');
 end
@@ -294,7 +334,9 @@ fprintf('========================================\n');
 
 fprintf('\nMatrix Multiplication (avg speedup over MATLAB):\n');
 avg_speedup_matmul = mean(times_builtin_matmul ./ times_mex_matmul);
-fprintf('  %.2fx faster\n', avg_speedup_matmul);
+avg_speedup_m4ri = mean(times_builtin_matmul ./ times_m4ri_matmul);
+fprintf('  MEX: %.2fx faster\n', avg_speedup_matmul);
+fprintf('  M4RI: %.2fx faster\n', avg_speedup_m4ri);
 
 if has_gf
     fprintf('\nRank Computation (avg speedup over MATLAB gf):\n');
@@ -302,8 +344,10 @@ if has_gf
     fprintf('  %.2fx faster\n', avg_speedup_rank);
 
     fprintf('\nNull Space Computation (avg speedup over MATLAB gf):\n');
-    avg_speedup_null = mean(times_builtin_null ./ times_mex_null);
-    fprintf('  %.2fx faster\n', avg_speedup_null);
+    avg_speedup_m4ri_null = mean(times_builtin_null ./ times_m4ri_null);
+    avg_speedup_bp_null = mean(times_builtin_null ./ times_bp_null);
+    fprintf('  M4RI: %.2fx faster\n', avg_speedup_m4ri_null);
+    fprintf('  BP: %.2fx faster\n', avg_speedup_bp_null);
 else
     fprintf('\nRank & Null Space Computation:\n');
     fprintf('  MEX-only benchmarks (gf not available)\n');
@@ -315,12 +359,12 @@ fprintf('Detailed Results\n');
 fprintf('========================================\n');
 
 fprintf('\nMatrix Multiplication:\n');
-fprintf('%-10s %-15s %-15s %-10s\n', 'Size', 'MEX (ms)', 'MATLAB (ms)', 'Speedup');
-fprintf('%-10s %-15s %-15s %-10s\n', '----', '--------', '-----------', '-------');
+fprintf('%-10s %-15s %-15s %-15s %-10s\n', 'Size', 'MEX (ms)', 'M4RI (ms)', 'MATLAB (ms)', 'Speedup (M4RI)');
+fprintf('%-10s %-15s %-15s %-15s %-10s\n', '----', '--------', '---------', '-----------', '--------------');
 for i = 1:length(sizes)
-    fprintf('%-10d %-15.4f %-15.4f %-10.2fx\n', ...
-        sizes(i), times_mex_matmul(i)*1000, times_builtin_matmul(i)*1000, ...
-        times_builtin_matmul(i)/times_mex_matmul(i));
+    fprintf('%-10d %-15.4f %-15.4f %-15.4f %-10.2fx\n', ...
+        sizes(i), times_mex_matmul(i)*1000, times_m4ri_matmul(i)*1000, times_builtin_matmul(i)*1000, ...
+        times_builtin_matmul(i)/times_m4ri_matmul(i));
 end
 
 if has_gf
@@ -334,13 +378,13 @@ if has_gf
     end
 
     fprintf('\nNull Space Computation:\n');
-    fprintf('%-10s %-15s %-15s %-10s\n', 'Size', 'MEX (ms)', 'MATLAB (ms)', 'Speedup');
-    fprintf('%-10s %-15s %-15s %-10s\n', '----', '--------', '-----------', '-------');
+    fprintf('%-10s %-15s %-15s %-15s %-10s\n', 'Size', 'M4RI (ms)', 'BP (ms)', 'MATLAB (ms)', 'Speedup (M4RI)');
+    fprintf('%-10s %-15s %-15s %-15s %-10s\n', '----', '---------', '-------', '-----------', '--------------');
     for i = 1:length(sizes)
-        fprintf('%-10s %-15.4f %-15.4f %-10.2fx\n', ...
+        fprintf('%-10s %-15.4f %-15.4f %-15.4f %-10.2fx\n', ...
             sprintf('%dx%d', sizes(i), round(1.5*sizes(i))), ...
-            times_mex_null(i)*1000, times_builtin_null(i)*1000, ...
-            times_builtin_null(i)/times_mex_null(i));
+            times_m4ri_null(i)*1000, times_bp_null(i)*1000, times_builtin_null(i)*1000, ...
+            times_builtin_null(i)/times_m4ri_null(i));
     end
 end
 

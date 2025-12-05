@@ -7,16 +7,17 @@ All functions support both **logical** (boolean) and **double** (integer) input 
 ## Features
 
 - **`mela_matmul_gf2`**: Fast matrix multiplication over GF(2).
-- **`mela_null_gf2`**: Efficient computation of the null space of a binary matrix.
+- **`mela_null_gf2`**: Null space computation using optimized bit-packed Gaussian Elimination (Standard GE).
+- **`mela_null_m4ri`**: Null space computation using the M4RI algorithm.
 - **`mela_rank_gf2`**: High-speed rank calculation for binary matrices.
-- **`mela_rank_m4ri`**: **[NEW]** "Best Practice" rank calculation using the M4RI algorithm (Method of the Four Russians), offering superior performance for large matrices.
+- **`mela_rank_m4ri`**: "Best Practice" rank calculation using the M4RI algorithm.
 
 ## Prerequisites
 
 - **MATLAB**: Required to run the scripts and use the MEX functions.
 - **C Compiler**: A C compiler compatible with MATLAB (e.g., GCC, Clang, MSVC).
 - **OpenMP** (Optional but recommended): For multi-threaded performance on Linux/macOS.
-    - *macOS*: Install `libomp` via Homebrew: `brew install libomp`
+  - *macOS*: Install `libomp` via Homebrew: `brew install libomp`
 
 ## Installation & Compilation
 
@@ -27,6 +28,7 @@ compile_mex
 ```
 
 The script will:
+
 1. Compile source files from `src/` to `bin/`.
 2. Add `bin/` to the MATLAB path.
 3. Run a suite of verification tests to ensure correctness.
@@ -49,7 +51,13 @@ Computes a basis for the null space of matrix $A$, such that $A \times Z = 0$ ov
 
 ```matlab
 A = randi([0, 1], 50, 100);
+
+% Standard: Bit-Packed GE (Fastest)
 Z = mela_null_gf2(A);
+
+% Alternative: M4RI
+Z_m4ri = mela_null_m4ri(A);
+
 % Verify: mela_matmul_gf2(A, Z) should be all zeros.
 ```
 

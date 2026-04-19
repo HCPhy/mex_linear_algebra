@@ -72,10 +72,17 @@ r = mela_rank_gf2(A);
 
 ## Benchmarks
 
-To verify performance, run the `benchmark_mex.m` script. This compares the MEX functions against MATLAB's native GF(2) operations (`gf` array, `rank`, `gf2null`).
+To verify performance, run the `benchmark_mex.m` script. This compares the MEX functions against MATLAB GF(2) baselines when Communications Toolbox is available:
+
+- `gf(double(A), 1)` arrays with compute-only timings on preconstructed GF arrays.
+- Conversion-inclusive `gf(...)` timings, so construction cost is visible separately.
+- `rank(gf(A,1))`, optional `gfrank(A,2)`, and the bundled `gf2null` helper for null-space checks.
+- Sequential multicore timing with `numThreads`, which sets MATLAB thread limits and OpenMP environment variables before the MEX functions are called.
 
 ```matlab
 benchmark_mex
+results = benchmark_mex('sizes', [32 64 128], 'nullSizes', [32 64]);
+results = benchmark_mex('numThreads', 8, 'sizes', 2048, 'nullSizes', 2048, 'rounds', 2);
 ```
 
 ![Benchmark Results](benchmark_results.png)

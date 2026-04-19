@@ -1,0 +1,24 @@
+name: MATLAB CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  mex-tests:
+    name: Compile and test MEX functions
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up MATLAB
+        uses: matlab-actions/setup-matlab@v2
+        with:
+          release: R2025a
+
+      - name: Run CI tests
+        uses: matlab-actions/run-command@v2
+        with:
+          command: run_ci_tests

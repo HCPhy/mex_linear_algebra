@@ -1,0 +1,34 @@
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# MATLAB editor/backups and generated state
+*.asv
+*.m~
+*.mlx~
+*.mat
+*.fig
+*.log
+
+# MATLAB MEX and native build products
+*.mex*
+*.o
+*.obj
+*.a
+*.so
+*.dylib
+*.dll
+*.lib
+*.exp
+*.ilk
+*.pdb
+
+# Local build/temp outputs
+/build/
+/dist/
+/tmp/
+/temp/
+/mex_*/
+/mela_simd_compare/
